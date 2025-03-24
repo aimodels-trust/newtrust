@@ -26,6 +26,12 @@ def load_model():
     return joblib.load(model_path)
 
 model = load_model()
+if isinstance(model, Pipeline):
+    preprocessor = model.named_steps['preprocessor']
+    classifier = model.named_steps['classifier']
+else:
+    preprocessor = None
+    classifier = model
 
 # Step 3: Define Streamlit app
 st.title("💳 Credit Card Default Prediction with Explainability")
