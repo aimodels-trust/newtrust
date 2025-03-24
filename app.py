@@ -6,8 +6,9 @@ import os
 import numpy as np
 import shap
 import matplotlib.pyplot as plt
-# Google Drive model file URL
-MODEL_URL = "https://drive.google.com/uc?id=1x4Vmmr6Ip-msXGQpeIa-WFkpyD5aECOo"
+
+# Step 1: Download the model from Google Drive
+model_url = "https://drive.google.com/uc?id=1en2IPj_z6OivZCBNDXepX-EAiZLvCILE"
 model_path = "credit_default_model.pkl"
 
 # Check if the model file already exists; if not, download it
@@ -25,10 +26,10 @@ except Exception as e:
 # Step 3: Define the app
 st.title("Credit Card Default Prediction with Explainability")
 
-# Define expected columns
+# Define expected columns (based on training data)
 expected_columns = [
     'LIMIT_BAL', 'SEX', 'EDUCATION', 'MARRIAGE', 'AGE',
-    'PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6',
+    'PAY_1', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6',
     'BILL_AMT1', 'BILL_AMT2', 'BILL_AMT3', 'BILL_AMT4', 'BILL_AMT5', 'BILL_AMT6',
     'PAY_AMT1', 'PAY_AMT2', 'PAY_AMT3', 'PAY_AMT4', 'PAY_AMT5', 'PAY_AMT6'
 ]
@@ -42,7 +43,7 @@ st.write("""
 - **EDUCATION**: (1 = Graduate School, 2 = University, 3 = High School, 4 = Others)
 - **MARRIAGE**: Marital status (1 = Married, 2 = Single, 3 = Others)
 - **AGE**: Age of the individual
-- **PAY_0 to PAY_6**: Past monthly payment records (-1 = Pay duly, 1-9 = Months delayed)
+- **PAY_1 to PAY_6**: Past monthly payment records (-1 = Pay duly, 1-9 = Months delayed)
 - **BILL_AMT1 to BILL_AMT6**: Amount of bill statement from April to September 2005
 - **PAY_AMT1 to PAY_AMT6**: Amount of previous payments from April to September 2005
 """)
@@ -57,15 +58,27 @@ uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
 if uploaded_file is not None:
     df = pd.read_csv(uploaded_file)
     
+    # Rename PAY_0 to PAY_1 if necessary
+    if 'PAY_0' in df.columns:
+        df.rename(columns={'PAY_0': 'PAY_1'}, inplace=True)
+    
     # Ensure all expected columns are present
     missing_cols = [col for col in expected_columns if col not in df.columns]
     if missing_cols:
         st.error(f"Missing columns in the uploaded file: {missing_cols}")
         st.stop()
     
+    # Add missing columns with default values
+    for col in expected_columns:
+        if col not in df.columns:
+            df[col] = 0  # Default value for numeric columns
+    
+    # Reorder columns to match the expected order
+    df = df[expected_columns]
+    
     # Make batch predictions
-    predictions = model.predict(df[expected_columns])
-    probabilities = model.predict_proba(df[expected_columns])[:, 1]
+    predictions = model.predict(df)
+    probabilities = model.predict_proba(df)[:, 1]
     df['Default_Risk'] = predictions
     df['Probability'] = probabilities
     
@@ -77,10 +90,10 @@ if uploaded_file is not None:
     
     # Explainability using SHAP
     explainer = shap.TreeExplainer(model)
-    shap_values = explainer.shap_values(df[expected_columns])
+    shap_values = explainer.shap_values(df)
     
     st.write("### Feature Importance")
-    shap.summary_plot(shap_values, df[expected_columns], show=False)
+    shap.summary_plot(shap_values, df, show=False)
     plt.savefig("shap_summary.png", bbox_inches='tight')
     st.image("shap_summary.png")
     
@@ -88,6 +101,6 @@ if uploaded_file is not None:
     st.write("### Individual Prediction Explanation")
     for i in range(min(3, len(df))):  # Show SHAP force plot for first few records
         st.write(f"Explanation for Record {i+1}:")
-        shap.force_plot(explainer.expected_value[1], shap_values[i, :], df[expected_columns].iloc[i, :], matplotlib=True)
+        shap.force_plot(explainer.expected_value[1], shap_values[i, :], df.iloc[i, :], matplotlib=True)
         plt.savefig(f"shap_force_{i}.png", bbox_inches='tight')
         st.image(f"shap_force_{i}.png")
