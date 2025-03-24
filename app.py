@@ -1,24 +1,18 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import gdown
 import os
 import numpy as np
 import shap
 import matplotlib.pyplot as plt
 from sklearn.pipeline import Pipeline
 
-# Step 0: Set page configuration
+# Set page configuration
 st.set_page_config(page_title="Credit Default Prediction", layout="wide")
 
-# Step 1: Download the model from Google Drive
-model_url = "https://drive.google.com/uc?id=1x4Vmmr6Ip-msXGQpeIa-WFkpyD5aECOo"
-model_path = "credit_default_model.pkl"
+# Load the trained model
+model_path = "/mnt/data/model (4).pkl"
 
-if not os.path.exists(model_path):
-    gdown.download(model_url, model_path, quiet=False)
-
-# Step 2: Load the trained model
 @st.cache_resource
 def load_model():
     return joblib.load(model_path)
@@ -27,13 +21,13 @@ model = load_model()
 
 # Ensure model is a pipeline
 if isinstance(model, Pipeline):
-    preprocessor = model.named_steps['preprocessor']
-    classifier = model.named_steps['classifier']
+    preprocessor = model.named_steps.get('preprocessor', None)
+    classifier = model.named_steps.get('classifier', model)
 else:
     preprocessor = None
     classifier = model
 
-# Step 3: Define Streamlit app
+# App Title
 st.title("💳 Credit Card Default Prediction with Explainability")
 
 # Sidebar Navigation
