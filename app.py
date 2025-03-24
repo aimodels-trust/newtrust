@@ -7,15 +7,15 @@ import numpy as np
 import shap
 import matplotlib.pyplot as plt
 
-# Step 1: Download the model from Google Drive if not present
+# Step 1: Download the model from Google Drive if not available locally
 model_url = "https://drive.google.com/uc?id=1x4Vmmr6Ip-msXGQpeIa-WFkpyD5aECOo"
 model_path = "credit_default_model.pkl"
 
 if not os.path.exists(model_path):
     gdown.download(model_url, model_path, quiet=False)
 
-# Step 2: Load the trained RandomForest model
-classifier = joblib.load(model_path)  # No 'named_steps', directly using model
+# Step 2: Load the trained model
+model = joblib.load(model_path)
 
 # Step 3: Define Streamlit app
 st.set_page_config(page_title="Credit Default Prediction", layout="wide")
@@ -25,7 +25,7 @@ st.title("💳 Credit Card Default Prediction with Explainability")
 st.sidebar.title("Navigation")
 app_mode = st.sidebar.radio("Select Mode", ["🏠 Home", "📊 Feature Importance"])
 
-# Expected input features (Make sure these match the trained model)
+# Expected input features
 expected_columns = [
     'LIMIT_BAL', 'SEX', 'EDUCATION', 'MARRIAGE', 'AGE',
     'PAY_0', 'PAY_2', 'PAY_3', 'PAY_4', 'PAY_5', 'PAY_6',
@@ -39,22 +39,35 @@ if app_mode == "🏠 Home":
     uploaded_file = st.file_uploader("📂 Upload CSV", type=["csv"])
 
     if uploaded_file:
-        df = pd.read_csv(uploaded_file)
+        # Read CSV without headers and assign column names
+        df = pd.read_csv(uploaded_file, header=None, names=expected_columns)
 
-        # Ensure correct number of columns
+        # Validate column count
         if df.shape[1] != len(expected_columns):
-            st.error("Uploaded CSV format is incorrect! Check the column count.")
+            st.error(f"❌ CSV format is incorrect! Expected {len(expected_columns)} columns, but got {df.shape[1]}.")
         else:
-            # Ensure columns are in the correct order
-            df = df[expected_columns]
+            st.success("✅ File uploaded successfully!")
+            st.write(df.head())  # Show first few rows for confirmation
 
-            # Make predictions
-            predictions = classifier.predict(df)
-            probabilities = classifier.predict_proba(df)[:, 1]
+            # Ensure model is a pipeline with preprocessing step
+            if hasattr(model, 'named_steps'):
+                preprocessor = model.named_steps['preprocessor']
+                classifier = model.named_steps['classifier']
 
+                # Transform input data and predict
+                X_transformed = preprocessor.transform(df)
+                predictions = classifier.predict(X_transformed)
+                probabilities = classifier.predict_proba(X_transformed)[:, 1]
+            else:
+                # Directly use the model if it's not a pipeline
+                predictions = model.predict(df)
+                probabilities = model.predict_proba(df)[:, 1]
+
+            # Append predictions to DataFrame
             df['Default_Risk'] = predictions
             df['Probability'] = probabilities
 
+            # Display results
             st.write("### Prediction Results")
             st.dataframe(df[['LIMIT_BAL', 'AGE', 'SEX', 'EDUCATION', 'MARRIAGE', 'Default_Risk', 'Probability']])
 
@@ -64,18 +77,30 @@ elif app_mode == "📊 Feature Importance":
     uploaded_file = st.file_uploader("📂 Upload CSV for SHAP Analysis", type=["csv"])
 
     if uploaded_file:
-        df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(uploaded_file, header=None, names=expected_columns)
 
         if df.shape[1] != len(expected_columns):
-            st.error("Uploaded CSV format is incorrect! Check the column count.")
+            st.error(f"❌ CSV format is incorrect! Expected {len(expected_columns)} columns, but got {df.shape[1]}.")
         else:
-            df = df[expected_columns]
+            st.success("✅ File uploaded successfully!")
 
-            # SHAP Explainability
+            # Ensure model is a pipeline with preprocessing step
+            if hasattr(model, 'named_steps'):
+                preprocessor = model.named_steps['preprocessor']
+                classifier = model.named_steps['classifier']
+                X_transformed = preprocessor.transform(df)
+            else:
+                classifier = model
+                X_transformed = df  # Use raw data if no preprocessing step
+
+            # SHAP Analysis
+            feature_names = expected_columns
+            sample_data = X_transformed[:5]  # Reduce sample size for faster analysis
+
             explainer = shap.TreeExplainer(classifier)
-            shap_values = explainer.shap_values(df[:5])  # Sample 5 rows for speed
+            shap_values = explainer.shap_values(sample_data)
 
-            # If using a classifier with multiple outputs, extract the correct SHAP values
+            # Ensure correct shape for SHAP values
             correct_shap_values = shap_values[1] if isinstance(shap_values, list) else shap_values
             shap_importance = np.abs(correct_shap_values).mean(axis=0)
 
@@ -83,8 +108,8 @@ elif app_mode == "📊 Feature Importance":
             shap_importance = np.array(shap_importance).flatten()
 
             # Ensure dimensions match
-            min_len = min(len(expected_columns), len(shap_importance))
-            feature_names = expected_columns[:min_len]
+            min_len = min(len(feature_names), len(shap_importance))
+            feature_names = feature_names[:min_len]
             shap_importance = shap_importance[:min_len]
 
             # Create DataFrame for feature importance
@@ -106,6 +131,6 @@ elif app_mode == "📊 Feature Importance":
 
             # SHAP Summary Plot
             st.write("### 📊 SHAP Summary Plot")
-            shap.summary_plot(correct_shap_values, df[:5], feature_names=feature_names, show=False)
+            shap.summary_plot(correct_shap_values, sample_data, feature_names=feature_names, show=False)
             plt.savefig("shap_summary.png", bbox_inches='tight')
             st.image("shap_summary.png")
