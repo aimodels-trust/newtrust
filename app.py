@@ -6,10 +6,10 @@ import os
 import numpy as np
 import shap
 import matplotlib.pyplot as plt
-
 # Step 1: Download the model from Google Drive
-model_url = "https://drive.google.com/uc?id=1lUD23krOBBwxVsZ6Cc0W0qqbN12V1ZDG"
+model_url = "https://drive.google.com/uc?id=1DV3s9t_M-vdPiUg35lev07g1jKfY5Ux7"
 model_path = "credit_default_model.pkl"
+
 
 # Check if the model file already exists; if not, download it
 if not os.path.exists(model_path):
