@@ -1,44 +1,46 @@
 import streamlit as st
 import pandas as pd
 import pickle
-import os
+import gdown
 
-st.title("Credit Default Prediction App")
-st.write("Upload your trained model and a CSV file to get predictions.")
+# Google Drive model file URL
+MODEL_URL = "https://drive.google.com/uc?id=1x4Vmmr6Ip-msXGQpeIa-WFkpyD5aECOo"
+MODEL_PATH = "model.pkl"
 
-# Model uploader
-model_file = st.file_uploader("Upload Model (.pkl)", type=["pkl"])
-
-if model_file is not None:
+# Download and load the trained model
+def load_model():
     try:
-        model = pickle.load(model_file)
-        st.success("Model loaded successfully!")
+        gdown.download(MODEL_URL, MODEL_PATH, quiet=False)
+        with open(MODEL_PATH, "rb") as f:
+            model = pickle.load(f)
+        return model
     except Exception as e:
-        st.error(f"Error loading model: {e}")
-        st.stop()
+        st.error("Error loading model: " + str(e))
+        return None
+
+# Load dataset
+@st.cache_data
+def load_data():
+    file = st.file_uploader("Upload CSV dataset", type=["csv"])
+    if file:
+        df = pd.read_csv(file)
+        return df
+    return None
+
+st.title("Credit Default Prediction")
+
+df = load_data()
+model = load_model()
+
+if df is not None and model is not None:
+    st.write("Dataset Preview:", df.head())
     
-    # File uploader for CSV
-    uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
+    # Ensure 'ID' column is dropped if present
+    df = df.drop(columns=['ID'], errors='ignore')
     
-    if uploaded_file is not None:
-        try:
-            # Read CSV
-            data = pd.read_csv(uploaded_file)
-            
-            # Ensure input format (adjust as needed based on model expectations)
-            st.write("### Uploaded Data Preview")
-            st.write(data.head())
-            
-            # Make predictions
-            predictions = model.predict(data)
-            data['Prediction'] = predictions
-            
-            st.write("### Predictions")
-            st.write(data)
-            
-            # Download button for results
-            csv = data.to_csv(index=False).encode('utf-8')
-            st.download_button("Download Predictions", data=csv, file_name="predictions.csv", mime="text/csv")
-        
-        except Exception as e:
-            st.error(f"Error processing file: {e}")
+    # Make predictions
+    predictions = model.predict(df)
+    df['Prediction'] = predictions
+    
+    st.write("Predictions:")
+    st.dataframe(df)
