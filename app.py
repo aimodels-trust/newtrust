@@ -8,7 +8,7 @@ import shap
 import matplotlib.pyplot as plt
 
 # Step 1: Download the model from Google Drive
-model_url = "https://drive.google.com/uc?id=1en2IPj_z6OivZCBNDXepX-EAiZLvCILE"
+model_url = "https://drive.google.com/uc?id=1Re7B6ANRMotj6LKOvwVWBfuSSCJyBiqY"
 model_path = "credit_default_model.pkl"
 
 # Check if the model file already exists; if not, download it
